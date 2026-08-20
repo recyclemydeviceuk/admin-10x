@@ -14,7 +14,7 @@ The panel defaults to `http://localhost:3010`. Its environment contains only `SE
 
 Settings contains:
 
-- Profile name, contact email, and S3-backed profile photo
+- Environment-backed Super Admin identity, team-member profiles, and S3-backed profile photos
 - Font size, layout density, sidebar, and motion preferences
 - Database backup status/history and manual backup
 - Backend payment, shipment, tracking, and subscription syncing status

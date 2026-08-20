@@ -43,7 +43,9 @@ export function ProfilePanel({ profile = DEFAULT_PROFILE, isPrimary = false }: {
     >
       <h2 className="text-title">Your profile</h2>
       <p className="mt-1 text-body-sm text-fg-muted">
-        How you appear in this panel. The sign-in email stays protected in the backend environment.
+        {isPrimary
+          ? 'Your Super Admin identity comes from the backend environment. Your photo and panel preferences are stored separately.'
+          : 'How you appear in this panel.'}
       </p>
 
       <div className="mt-6 grid gap-6 sm:grid-cols-[auto_1fr] sm:gap-8">
@@ -96,20 +98,23 @@ export function ProfilePanel({ profile = DEFAULT_PROFILE, isPrimary = false }: {
         <div className="grid content-start gap-4 sm:grid-cols-2">
           <div>
             <label className="field-label" htmlFor="admin-name">Name</label>
-            <input id="admin-name" name="name" defaultValue={profile.name} minLength={2} required className="field-input" />
+            <input id="admin-name" name="name" defaultValue={profile.name} minLength={2} required disabled={isPrimary} className="field-input disabled:cursor-not-allowed disabled:opacity-60" />
+            {isPrimary ? <p className="mt-1.5 text-caption text-fg-subtle">Configured by ADMIN_NAME in the server environment.</p> : null}
           </div>
           <div>
             <label className="field-label" htmlFor="admin-email">Contact email</label>
             <input id="admin-email" name="email" type="email" defaultValue={profile.email} required disabled={isPrimary} className="field-input disabled:cursor-not-allowed disabled:opacity-60" />
             <p className="mt-1.5 text-caption text-fg-subtle">
               {isPrimary
-                ? "The Super Admin email is fixed in the server's .env file."
+                ? 'Configured by ADMIN_EMAIL in the server environment.'
                 : 'Used for your displayed profile and notifications.'}
             </p>
           </div>
-          <div className="sm:col-span-2">
-            <button className="btn-accent" disabled={pending}>{pending ? 'Saving…' : 'Save profile'}</button>
-          </div>
+          {!isPrimary ? (
+            <div className="sm:col-span-2">
+              <button className="btn-accent" disabled={pending}>{pending ? 'Saving…' : 'Save profile'}</button>
+            </div>
+          ) : null}
         </div>
       </div>
     </form>
