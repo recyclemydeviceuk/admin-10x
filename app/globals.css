@@ -1,0 +1,198 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* =========================================================
+   10X ADMIN — pure white, spacious, Poppins-first.
+   Quantico Bold Italic only for brand moments.
+   Green #6DE325 is the single accent; no grays as surfaces.
+   ========================================================= */
+
+* {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background: #ffffff;
+  color: #0a0c12;
+  font-family: var(--font-poppins), system-ui, -apple-system, Arial, sans-serif;
+  font-size: 0.8125rem;
+}
+
+::selection {
+  background: #d4fe4c;
+  color: #000204;
+}
+
+@layer components {
+  /* Brand headline — used sparingly (page titles, hero numbers) */
+  .brand-head {
+    font-family: var(--font-quantico), system-ui, sans-serif;
+    font-weight: 700;
+    font-style: italic;
+    text-transform: uppercase;
+    letter-spacing: 0;
+  }
+
+  /* Kicker / column label */
+  .kicker {
+    @apply text-overline uppercase text-fg-subtle;
+  }
+
+  .btn-accent {
+    @apply inline-flex items-center justify-center gap-2 rounded-full bg-accent
+      px-5 py-2.5 text-body-sm font-semibold text-accent-ink transition-all
+      duration-200 hover:bg-accent-hover hover:shadow-glow-soft
+      active:bg-accent-pressed focus-visible:outline-none focus-visible:ring-2
+      focus-visible:ring-accent focus-visible:ring-offset-2
+      disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none;
+  }
+  .btn-outline {
+    @apply inline-flex items-center justify-center gap-2 rounded-full border
+      border-paper-300 bg-white px-5 py-2.5 text-body-sm font-medium text-fg
+      transition-colors duration-200 hover:border-fg
+      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg
+      disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .btn-danger {
+    @apply inline-flex items-center justify-center gap-2 rounded-full border
+      border-danger/30 bg-white px-5 py-2.5 text-body-sm font-medium text-danger
+      transition-colors duration-200 hover:bg-danger hover:text-white
+      disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .card {
+    @apply rounded-xl border border-paper-200 bg-white p-6 shadow-card;
+  }
+
+  .field-label {
+    @apply mb-2 block text-caption font-medium text-fg-muted;
+  }
+  .field-input {
+    @apply w-full rounded-lg border border-paper-300 bg-white px-3.5 py-2.5
+      text-body text-fg outline-none transition-all duration-150
+      placeholder:text-fg-subtle hover:border-fg-subtle
+      focus:border-accent-pressed focus:ring-2 focus:ring-accent/25
+      disabled:cursor-not-allowed disabled:border-paper-200 disabled:text-fg-subtle;
+  }
+
+  /* Segmented control (range pickers, filters) */
+  .segment {
+    @apply inline-flex rounded-full border border-paper-200 bg-white p-1;
+  }
+  .segment-item {
+    @apply rounded-full px-4 py-1.5 text-body-sm font-medium text-fg-muted
+      transition-colors duration-150 hover:text-fg;
+  }
+  .segment-item-active {
+    @apply bg-ink text-white hover:text-white;
+  }
+}
+
+.scroll-x {
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+/* Sidebar nav — thin lime thumb on ink */
+.sidebar-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(109, 227, 37, 0.4) transparent;
+}
+.sidebar-scroll::-webkit-scrollbar {
+  width: 5px;
+}
+.sidebar-scroll::-webkit-scrollbar-track {
+  background: transparent;
+  margin: 6px 0;
+}
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  background: rgba(109, 227, 37, 0.35);
+  border-radius: 99px;
+}
+.sidebar-scroll::-webkit-scrollbar-thumb:hover {
+  background: #6de325;
+}
+
+@keyframes toast-in {
+  from {
+    transform: translateX(112%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+@keyframes toast-out {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(112%);
+    opacity: 0;
+  }
+}
+@media (max-width: 639px) {
+  @keyframes toast-in {
+    from {
+      transform: translateY(120%);
+      opacity: 0;
+    }
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+  @keyframes toast-out {
+    from {
+      transform: translateY(0);
+      opacity: 1;
+    }
+    to {
+      transform: translateY(120%);
+      opacity: 0;
+    }
+  }
+}
+.toast-enter {
+  animation: toast-in 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.toast-leave {
+  animation: toast-out 0.32s cubic-bezier(0.7, 0, 0.84, 0) both;
+}
+
+/* Confirm / prompt modal */
+@keyframes modal-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes modal-card-in {
+  from { opacity: 0; transform: translateY(14px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.modal-enter {
+  animation: modal-fade-in 0.16s ease-out both;
+}
+.modal-enter .modal-card {
+  animation: modal-card-in 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.modal-leave {
+  animation: modal-fade-in 0.14s ease-in reverse both;
+}
+
+/* Calm scrollbars */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: #dde2dd;
+  border-radius: 8px;
+  border: 3px solid #ffffff;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
