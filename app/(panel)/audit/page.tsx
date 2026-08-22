@@ -26,6 +26,7 @@ type Entry = {
   details: Record<string, unknown> | null;
   ip: string;
   durationMs: number;
+  source?: string;
 };
 
 /**
@@ -87,7 +88,10 @@ export default async function AuditPage({ searchParams }: { searchParams: Promis
                 <span className="block text-[11px] text-fg-subtle">{e.ip}</span>
               </td>
               <td className={td}>
-                <span className="block font-semibold">{e.adminName || '—'}</span>
+                <span className="block font-semibold">
+                  {e.adminName || '—'}
+                  {e.source === 'local' ? <Pill tone="warning">dev machine</Pill> : null}
+                </span>
                 <span className="block text-[11px] text-fg-subtle">{e.adminEmail}{e.roleName ? ` · ${e.roleName}` : ''}</span>
               </td>
               <td className={`${td} font-medium`}>{e.action}</td>
