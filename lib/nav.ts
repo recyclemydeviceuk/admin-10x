@@ -35,6 +35,8 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: '/team', label: 'Team', icon: 'team', permission: 'team.view' },
       { href: '/roles', label: 'Roles & Access', icon: 'shield', permission: 'roles.view' },
+      // Super Admin only: the nav filter treats '*' as "must hold the wildcard".
+      { href: '/audit', label: 'Audit log', icon: 'eye', permission: '*' },
       { href: '/settings', label: 'Settings', icon: 'settings', permission: '' },
     ],
   },
