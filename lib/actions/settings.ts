@@ -35,17 +35,20 @@ async function patch(path: string, body: unknown): Promise<ActionResult> {
 }
 
 
+export type DeliveryMode = 'free' | 'priced' | 'live';
+
 export type DeliverySettings = {
-  deliveryMode: 'free' | 'priced';
+  deliveryMode: DeliveryMode;
   flatShipping: number;
   freeShippingOver: number;
 };
 
 export async function saveDelivery(formData: FormData): Promise<ActionResult> {
   await assertPermission('settings.delivery');
-  const mode = String(formData.get('deliveryMode')) === 'free' ? 'free' : 'priced';
+  const raw = String(formData.get('deliveryMode'));
+  const mode: DeliveryMode = raw === 'free' ? 'free' : raw === 'live' ? 'live' : 'priced';
   const body: Record<string, unknown> = { deliveryMode: mode };
-  if (mode === 'priced') {
+  if (mode !== 'free') {
     body.flatShipping = Number(formData.get('flatShipping'));
     body.freeShippingOver = Number(formData.get('freeShippingOver'));
     if (!Number.isFinite(body.flatShipping as number) || (body.flatShipping as number) < 0) {
@@ -83,12 +86,17 @@ export async function saveSubscriptionSettings(formData: FormData): Promise<Acti
   return patch('/api/v1/admin/settings/subscriptions', body);
 }
 
+export type PickupLocation = { name: string; address: string; address2: string; city: string; state: string; pincode: string; phone: string };
+
 export type StoreSettings = {
   name: string;
   supportEmail: string;
   supportPhone: string;
   codEnabled: boolean;
-  warehouse: { name: string; address: string; city: string; state: string; pincode: string; phone: string };
+  /** The warehouse, as Shiprocket has it. Read-only here — edit it in Shiprocket. */
+  pickup: PickupLocation | null;
+  pickupNickname: string;
+  shiprocketConfigured: boolean;
 };
 
 export async function saveStoreSettings(formData: FormData): Promise<ActionResult> {
@@ -99,18 +107,9 @@ export async function saveStoreSettings(formData: FormData): Promise<ActionResul
     supportEmail: s('supportEmail'),
     supportPhone: s('supportPhone'),
     codEnabled: formData.get('codEnabled') === 'on',
-    warehouse: {
-      name: s('whName'),
-      address: s('whAddress'),
-      city: s('whCity'),
-      state: s('whState'),
-      pincode: s('whPincode'),
-      phone: s('whPhone'),
-    },
   };
   if (!body.name) return { ok: false, message: 'The store needs a name.' };
   if (!/^\S+@\S+\.\S+$/.test(body.supportEmail)) return { ok: false, message: 'Enter a valid support email.' };
-  if (body.warehouse.pincode && !/^\d{6}$/.test(body.warehouse.pincode)) return { ok: false, message: 'Warehouse pincode must be 6 digits.' };
   return patch('/api/v1/admin/settings/store', body);
 }
 

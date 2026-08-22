@@ -22,7 +22,7 @@ export const dynamic = 'force-dynamic';
 const TABS = [
   { key: 'profile', label: 'Profile', icon: 'users', permission: '' },
   { key: 'face-lock', label: 'Set a Face Lock', icon: 'scan', permission: '' },
-  { key: 'store', label: 'Store & warehouse', icon: 'box', permission: 'settings.view' },
+  { key: 'store', label: 'Store', icon: 'box', permission: 'settings.view' },
   { key: 'delivery', label: 'Delivery', icon: 'truck', permission: 'settings.view' },
   { key: 'subscriptions', label: 'Subscriptions', icon: 'repeat', permission: 'settings.view' },
   { key: 'coming-soon', label: 'Coming soon', icon: 'eye-off', permission: 'settings.maintenance' },
@@ -84,12 +84,12 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     const response = await backendFetch('/api/v1/admin/settings');
     if (response.ok) {
       const body = (await response.json().catch(() => ({}))) as {
-        settings?: { store?: { deliveryMode?: 'free' | 'priced'; flatShipping?: number; freeShippingOver?: number } };
+        settings?: { store?: { deliveryMode?: 'free' | 'priced' | 'live'; flatShipping?: number; freeShippingOver?: number } };
       };
       const store = body.settings?.store;
       if (store) {
         delivery = {
-          deliveryMode: store.deliveryMode === 'free' ? 'free' : 'priced',
+          deliveryMode: store.deliveryMode === 'free' ? 'free' : store.deliveryMode === 'live' ? 'live' : 'priced',
           flatShipping: store.flatShipping ?? 49,
           freeShippingOver: store.freeShippingOver ?? 999,
         };
@@ -99,25 +99,25 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
 
   let storeSettings: StoreSettings = {
     name: '10X', supportEmail: '', supportPhone: '', codEnabled: true,
-    warehouse: { name: '', address: '', city: '', state: '', pincode: '', phone: '' },
+    pickup: null, pickupNickname: '', shiprocketConfigured: false,
   };
   if (tab === 'store') {
     const response = await backendFetch('/api/v1/admin/settings');
     if (response.ok) {
       const body = (await response.json().catch(() => ({}))) as {
-        settings?: { store?: Partial<StoreSettings>; warehouse?: Partial<StoreSettings['warehouse']> };
+        settings?: { store?: Partial<StoreSettings> };
+        integrations?: { shiprocket?: { configured?: boolean; pickupLocation?: string; pickup?: StoreSettings['pickup'] } };
       };
       const st = body.settings?.store ?? {};
-      const wh = body.settings?.warehouse ?? {};
+      const sr = body.integrations?.shiprocket ?? {};
       storeSettings = {
         name: st.name ?? '10X',
         supportEmail: st.supportEmail ?? '',
         supportPhone: st.supportPhone ?? '',
         codEnabled: st.codEnabled ?? true,
-        warehouse: {
-          name: wh.name ?? '', address: wh.address ?? '', city: wh.city ?? '',
-          state: wh.state ?? '', pincode: wh.pincode ?? '', phone: wh.phone ?? '',
-        },
+        pickup: sr.pickup ?? null,
+        pickupNickname: sr.pickupLocation ?? '',
+        shiprocketConfigured: Boolean(sr.configured),
       };
     }
   }

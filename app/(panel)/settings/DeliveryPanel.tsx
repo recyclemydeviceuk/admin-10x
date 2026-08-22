@@ -3,14 +3,18 @@
 import { useState, useTransition } from 'react';
 
 import { useToast } from '@/components/Toast';
-import { saveDelivery, type DeliverySettings } from '@/lib/actions/settings';
+import { saveDelivery, type DeliveryMode, type DeliverySettings } from '@/lib/actions/settings';
 
 /**
- * Delivery charges. One switch: free everywhere, or a flat fee below a
- * threshold. The checkout prices every order against whatever is saved here.
+ * Delivery charges. Three ways to price delivery; the cart and checkout
+ * follow whichever is saved here within seconds:
+ *   free   — never charge
+ *   priced — a flat fee, waived above a threshold
+ *   live   — Shiprocket's real courier rate for the customer's pincode,
+ *            quoted as they shop; the flat fee covers the rare miss
  */
 export function DeliveryPanel({ delivery, canEdit }: { delivery: DeliverySettings; canEdit: boolean }) {
-  const [mode, setMode] = useState<'free' | 'priced'>(delivery.deliveryMode);
+  const [mode, setMode] = useState<DeliveryMode>(delivery.deliveryMode);
   const [pending, start] = useTransition();
   const { toast } = useToast();
 
@@ -26,7 +30,7 @@ export function DeliveryPanel({ delivery, canEdit }: { delivery: DeliverySetting
 
       <input type="hidden" name="deliveryMode" value={mode} />
 
-      <div className="mt-6 grid gap-3 sm:grid-cols-2">
+      <div className="mt-6 grid gap-3 sm:grid-cols-3">
         <ModeCard
           active={mode === 'free'}
           disabled={!canEdit}
@@ -37,16 +41,23 @@ export function DeliveryPanel({ delivery, canEdit }: { delivery: DeliverySetting
         <ModeCard
           active={mode === 'priced'}
           disabled={!canEdit}
-          title="Priced delivery"
-          detail="Charge a flat fee below a free-delivery threshold."
+          title="Flat fee"
+          detail="One fixed fee, waived above a threshold."
           onSelect={() => setMode('priced')}
+        />
+        <ModeCard
+          active={mode === 'live'}
+          disabled={!canEdit}
+          title="Live courier rate"
+          detail="Shiprocket’s real rate for the customer’s pincode, shown in the cart as they shop."
+          onSelect={() => setMode('live')}
         />
       </div>
 
-      {mode === 'priced' ? (
+      {mode !== 'free' ? (
         <div className="mt-5 grid gap-4 sm:grid-cols-2">
           <div>
-            <label className="field-label" htmlFor="delivery-fee">Delivery fee (₹)</label>
+            <label className="field-label" htmlFor="delivery-fee">{mode === 'live' ? 'Fallback fee (₹)' : 'Delivery fee (₹)'}</label>
             <input
               id="delivery-fee"
               name="flatShipping"
@@ -54,6 +65,7 @@ export function DeliveryPanel({ delivery, canEdit }: { delivery: DeliverySetting
               min={0}
               step={1}
               defaultValue={delivery.flatShipping}
+              placeholder="0"
               disabled={!canEdit}
               required
               className="field-input"
@@ -72,8 +84,15 @@ export function DeliveryPanel({ delivery, canEdit }: { delivery: DeliverySetting
               required
               className="field-input"
             />
-            <p className="mt-1.5 text-caption text-fg-subtle">Orders at or above this amount ship free.</p>
+            <p className="mt-1.5 text-caption text-fg-subtle">Orders at or above this amount ship free. 0 = never.</p>
           </div>
+          {mode === 'live' ? (
+            <p className="rounded-lg bg-paper-100 px-3.5 py-2.5 text-caption text-fg-muted sm:col-span-2">
+              The customer enters a pincode in the cart (or picks an address at checkout) and sees the courier, the
+              rate and the delivery estimate from Shiprocket, quoted from your pickup pincode. Cash-on-delivery rates
+              include the courier’s COD charge. The fallback fee is charged only if Shiprocket can’t answer.
+            </p>
+          ) : null}
         </div>
       ) : (
         <p className="mt-5 rounded-lg bg-paper-100 px-3.5 py-2.5 text-caption text-fg-muted">

@@ -6,9 +6,9 @@ import { useToast } from '@/components/Toast';
 import { saveStoreSettings, type StoreSettings } from '@/lib/actions/settings';
 
 /**
- * Store identity and the warehouse. The warehouse block is what Shiprocket
- * uses as the pickup / return-to address — returns cannot be booked while
- * it is empty.
+ * Store identity and support contacts. The warehouse is shown, not edited:
+ * Shiprocket owns the pickup address (it verifies the phone and ties
+ * couriers to it), so it is managed there once and read here.
  */
 export function StorePanel({ settings, canEdit }: { settings: StoreSettings; canEdit: boolean }) {
   const [pending, start] = useTransition();
@@ -19,10 +19,11 @@ export function StorePanel({ settings, canEdit }: { settings: StoreSettings; can
       <input id={id} name={name} defaultValue={value} disabled={!canEdit} className="field-input" {...extra} />
     </div>
   );
+  const pickup = settings.pickup;
 
   return (
-    <form action={(data) => start(async () => toast(await saveStoreSettings(data)))} className="space-y-4">
-      <div className="card">
+    <div className="space-y-4">
+      <form action={(data) => start(async () => toast(await saveStoreSettings(data)))} className="card">
         <h2 className="text-title">Store</h2>
         <p className="mt-1 text-body-sm text-fg-muted">Name and support contacts shown on invoices and emails.</p>
         <div className="mt-6 grid gap-4 sm:grid-cols-3">
@@ -34,21 +35,6 @@ export function StorePanel({ settings, canEdit }: { settings: StoreSettings; can
           <input type="checkbox" name="codEnabled" defaultChecked={settings.codEnabled} disabled={!canEdit} className="h-4 w-4" />
           Offer cash on delivery at checkout
         </label>
-      </div>
-
-      <div className="card">
-        <h2 className="text-title">Warehouse</h2>
-        <p className="mt-1 text-body-sm text-fg-muted">
-          Where couriers collect parcels and deliver returns. This must match the pickup location in Shiprocket.
-        </p>
-        <div className="mt-6 grid gap-4 sm:grid-cols-2">
-          {field('wh-name', 'whName', 'Location name', settings.warehouse.name)}
-          {field('wh-phone', 'whPhone', 'Phone', settings.warehouse.phone)}
-          <div className="sm:col-span-2">{field('wh-address', 'whAddress', 'Address', settings.warehouse.address)}</div>
-          {field('wh-city', 'whCity', 'City', settings.warehouse.city)}
-          {field('wh-state', 'whState', 'State', settings.warehouse.state)}
-          {field('wh-pin', 'whPincode', 'Pincode', settings.warehouse.pincode, { inputMode: 'numeric', maxLength: 6 })}
-        </div>
         {canEdit ? (
           <div className="mt-6">
             <button className="btn-accent" disabled={pending}>{pending ? 'Saving…' : 'Save store settings'}</button>
@@ -56,7 +42,37 @@ export function StorePanel({ settings, canEdit }: { settings: StoreSettings; can
         ) : (
           <p className="mt-6 text-caption text-fg-subtle">Your role can view these settings but not change them.</p>
         )}
+      </form>
+
+      <div className="card">
+        <h2 className="text-title">Warehouse</h2>
+        <p className="mt-1 text-body-sm text-fg-muted">
+          Where couriers collect parcels and deliver returns — read from Shiprocket, where it is set up once
+          (Settings → Pickup Addresses). Live delivery rates are quoted from this pincode.
+        </p>
+        {!settings.shiprocketConfigured ? (
+          <p className="mt-5 rounded-lg bg-paper-100 px-3.5 py-2.5 text-caption text-fg-muted">
+            Shiprocket isn’t connected on the backend yet (SHIPROCKET_EMAIL / PASSWORD).
+          </p>
+        ) : pickup ? (
+          <dl className="mt-5 grid gap-x-6 gap-y-3 text-body-sm sm:grid-cols-2">
+            <div><dt className="text-caption text-fg-subtle">Pickup location</dt><dd className="font-semibold">{pickup.name}</dd></div>
+            <div><dt className="text-caption text-fg-subtle">Phone</dt><dd>{pickup.phone || '—'}</dd></div>
+            <div className="sm:col-span-2"><dt className="text-caption text-fg-subtle">Address</dt><dd>{[pickup.address, pickup.address2].filter(Boolean).join(', ')}</dd></div>
+            <div><dt className="text-caption text-fg-subtle">City / state</dt><dd>{pickup.city}, {pickup.state}</dd></div>
+            <div><dt className="text-caption text-fg-subtle">Pincode</dt><dd>{pickup.pincode}</dd></div>
+          </dl>
+        ) : (
+          <p className="mt-5 rounded-lg bg-paper-100 px-3.5 py-2.5 text-caption text-fg-muted">
+            No pickup address found in Shiprocket{settings.pickupNickname ? ` matching “${settings.pickupNickname}”` : ''}. Add one there and it appears here.
+          </p>
+        )}
+        {pickup && settings.pickupNickname && pickup.name.toLowerCase() !== settings.pickupNickname.toLowerCase() ? (
+          <p className="mt-4 text-caption text-fg-muted">
+            The backend is set to use “{settings.pickupNickname}”, which Shiprocket doesn’t have — showing “{pickup.name}” instead. Set SHIPROCKET_PICKUP_LOCATION to match.
+          </p>
+        ) : null}
       </div>
-    </form>
+    </div>
   );
 }
