@@ -118,6 +118,11 @@ export async function saveAutoShipments(enabled: boolean): Promise<ActionResult>
   return patch('/api/v1/admin/settings/syncing', { autoShipments: enabled });
 }
 
+export async function saveAutoApproveReturns(enabled: boolean): Promise<ActionResult> {
+  await assertPermission('settings.syncing');
+  return patch('/api/v1/admin/settings/syncing', { autoApproveReturns: enabled });
+}
+
 export async function saveComingSoon(enabled: boolean): Promise<ActionResult> {
   await assertPermission('settings.maintenance');
   return patch('/api/v1/admin/settings/coming-soon', { enabled });

@@ -32,7 +32,7 @@ const TABS = [
 
 type TabKey = (typeof TABS)[number]['key'];
 
-type SyncState = { lastRunAt: string | null; log: { at: string; text: string }[]; autoShipments?: boolean };
+type SyncState = { lastRunAt: string | null; log: { at: string; text: string }[]; autoShipments?: boolean; autoApproveReturns?: boolean };
 
 async function loadSyncState(): Promise<SyncState> {
   const response = await backendFetch('/api/v1/admin/settings');
@@ -160,7 +160,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         {tab === 'delivery' ? <DeliveryPanel delivery={delivery} canEdit={can(user, 'settings.delivery')} /> : null}
         {tab === 'subscriptions' ? <SubscriptionsPanel settings={subscriptionSettings} canEdit={can(user, 'settings.delivery')} /> : null}
         {tab === 'backups' ? <BackupsPanel status={await fetchBackupStatus()} canRun /> : null}
-        {tab === 'syncing' ? <SyncingPanel lastRunAt={syncState.lastRunAt} log={syncState.log} autoShipments={Boolean(syncState.autoShipments)} canEdit={can(user, 'settings.syncing')} /> : null}
+        {tab === 'syncing' ? <SyncingPanel lastRunAt={syncState.lastRunAt} log={syncState.log} autoShipments={Boolean(syncState.autoShipments)} autoApproveReturns={syncState.autoApproveReturns !== false} canEdit={can(user, 'settings.syncing')} /> : null}
       </div>
     </>
   );

@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useToast } from '@/components/Toast';
-import { saveAutoShipments } from '@/lib/actions/settings';
+import { saveAutoShipments, saveAutoApproveReturns } from '@/lib/actions/settings';
 import {
   changeOwnPassword,
   removeAdminPhoto,
@@ -172,16 +172,31 @@ export function SyncingPanel({
   lastRunAt,
   log,
   autoShipments,
+  autoApproveReturns,
   canEdit,
 }: {
   lastRunAt: string | null;
   log: { at: string; text: string }[];
   autoShipments: boolean;
+  autoApproveReturns: boolean;
   canEdit: boolean;
 }) {
   const [pending, start] = useTransition();
   const [enabled, setEnabled] = useState(autoShipments);
+  const [autoReturns, setAutoReturns] = useState(autoApproveReturns);
   const { toast } = useToast();
+  const Switch = ({ on, onToggle }: { on: boolean; onToggle: () => void }) => (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      disabled={!canEdit || pending}
+      onClick={onToggle}
+      className={`relative h-7 w-12 shrink-0 rounded-full transition-colors disabled:opacity-50 ${on ? 'bg-accent' : 'bg-paper-300'}`}
+    >
+      <span className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all ${on ? 'left-6' : 'left-1'}`} />
+    </button>
+  );
   return (
     <div className="space-y-4">
       <div className="card">
@@ -219,6 +234,29 @@ export function SyncingPanel({
         >
           <span className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all ${enabled ? 'left-6' : 'left-1'}`} />
         </button>
+      </div>
+
+      <div className="card flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
+          <h3 className="text-body font-semibold">Auto-approve returns</h3>
+          <p className="mt-1 text-body-sm text-fg-muted">
+            When on, a return request is approved within a minute and a reverse pickup is booked — the customer only
+            has to hand the parcel over. Either way, once the courier delivers it back to the warehouse the items are
+            restocked and a prepaid refund is sent through Cashfree automatically. Cash-on-delivery returns are flagged
+            for a bank payout.
+          </p>
+        </div>
+        <Switch
+          on={autoReturns}
+          onToggle={() =>
+            start(async () => {
+              const next = !autoReturns;
+              const out = await saveAutoApproveReturns(next);
+              if (out.ok) setAutoReturns(next);
+              toast(out);
+            })
+          }
+        />
       </div>
 
       <div className="card">
