@@ -11,7 +11,6 @@ import {
   requestPickupAction,
   generateLabelAction,
   generateInvoiceAction,
-  syncTrackingAction,
   cancelShipmentAction,
   setManualTracking,
   deleteOrder,
@@ -22,17 +21,6 @@ import { Icon } from '@/components/Icon';
 import { Select } from '@/components/Select';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/Confirm';
-
-const STATUS_OPTIONS: { value: OrderStatus; label: string }[] = [
-  { value: 'placed', label: 'Placed' },
-  { value: 'confirmed', label: 'Confirmed' },
-  { value: 'packed', label: 'Packed' },
-  { value: 'shipped', label: 'Shipped' },
-  { value: 'out_for_delivery', label: 'Out for delivery' },
-  { value: 'delivered', label: 'Delivered' },
-  { value: 'cancelled', label: 'Cancelled' },
-  { value: 'returned', label: 'Returned' },
-];
 
 /* ------------------------------------------------------- status + notes */
 
@@ -87,6 +75,19 @@ export function OrderActions({
           map the courier's own updates onto the order, so a hand-picked status
           can never disagree with where the parcel actually is. The one manual
           act that remains is cancelling — a decision, not a location. */}
+      {/* A placed order waits for its payment (online) or a nod from the team
+          (cash on delivery / manual). Confirming is what lets it ship. */}
+      {canStatus && status === 'placed' ? (
+        <button
+          type="button"
+          className="btn-accent w-full justify-center"
+          disabled={pending}
+          onClick={() => run(() => updateOrderStatus(orderId, 'confirmed'))}
+        >
+          Confirm order
+        </button>
+      ) : null}
+
       {canStatus && status !== 'cancelled' && status !== 'delivered' && status !== 'returned' ? (
         <button
           type="button"
@@ -237,8 +238,13 @@ export function FulfilmentPanel({
 
       {autoShipments && !hasShipment ? (
         <p className="rounded-lg bg-accent-soft px-3.5 py-2.5 text-caption text-accent-pressed">
-          Auto-fulfilment is on — paid orders get a shipment booked automatically on the next sync sweep.
-          The buttons below still work if you want to move faster.
+          Auto-book is on — confirmed orders get a courier booked and pickup requested within a minute.
+          The button below does the same thing right now.
+        </p>
+      ) : null}
+      {hasShipment && shipment?.pickupRequestedAt ? (
+        <p className="rounded-lg bg-paper-100 px-3.5 py-2.5 text-caption text-fg-muted">
+          Pickup requested — the courier is on the way. Status now follows the courier automatically.
         </p>
       ) : null}
 
@@ -257,10 +263,9 @@ export function FulfilmentPanel({
               ) : null}
               <ApiButton label="Generate label (PDF)" icon="download" onClick={() => run(() => generateLabelAction(orderId))} />
               <ApiButton label="Shiprocket invoice (PDF)" icon="download" onClick={() => run(() => generateInvoiceAction(orderId))} />
-              <ApiButton label="Track & sync status" icon="repeat" onClick={() => run(() => syncTrackingAction(orderId))} />
             </>
           ) : null}
-          {hasShipment ? (
+          {hasShipment && !shipment?.pickupRequestedAt ? (
             <button
               type="button"
               className="btn-danger justify-start"

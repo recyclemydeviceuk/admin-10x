@@ -9,15 +9,19 @@ import { useToast } from '@/components/Toast';
 
 export function NewSubscriptionForm({
   customers,
-  defaultPrice,
+  packs,
+  intervalDays,
 }: {
   customers: { id: string; name: string; email: string }[];
-  defaultPrice: number;
+  packs: { id: string; label: string; subscribePrice: number }[];
+  intervalDays: number;
 }) {
   const [open, setOpen] = useState(false);
   const [pending, start] = useTransition();
   const { toast } = useToast();
   const [customerId, setCustomerId] = useState(customers[0]?.id ?? '');
+  const [pack, setPack] = useState(packs[0]?.id ?? '');
+  const selected = packs.find((p) => p.id === pack);
 
   return (
     <>
@@ -25,7 +29,7 @@ export function NewSubscriptionForm({
         <Icon name="plus" className="h-4 w-4" />
         New subscription
       </button>
-      <Modal open={open} onClose={() => setOpen(false)} title="New subscription — 10X Daytime, every 4 weeks">
+      <Modal open={open} onClose={() => setOpen(false)} title={`New subscription — every ${intervalDays} days`}>
         <form
           className="grid gap-4"
           action={(fd) =>
@@ -47,10 +51,25 @@ export function NewSubscriptionForm({
               placeholder="Pick a customer"
             />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="field-label" htmlFor="s-pack">Pack</label>
+            <Select
+              id="s-pack"
+              name="pack"
+              options={packs.map((p) => ({ value: p.id, label: p.label, hint: `₹${p.subscribePrice.toLocaleString('en-IN')} / cycle` }))}
+              value={pack}
+              onChange={setPack}
+              placeholder="Pick a pack"
+            />
+          </div>
+          <div className="grid grid-cols-3 gap-4">
             <div>
               <label className="field-label" htmlFor="s-price">Price per cycle (₹)</label>
-              <input id="s-price" name="price" type="number" min={1} defaultValue={defaultPrice} required className="field-input" />
+              <input id="s-price" key={pack} name="price" type="number" min={1} defaultValue={selected?.subscribePrice ?? ''} required className="field-input" />
+            </div>
+            <div>
+              <label className="field-label" htmlFor="s-qty">Quantity</label>
+              <input id="s-qty" name="quantity" type="number" min={1} defaultValue={1} required className="field-input" />
             </div>
             <div>
               <label className="field-label" htmlFor="s-next">First delivery</label>
@@ -58,7 +77,7 @@ export function NewSubscriptionForm({
             </div>
           </div>
           <div className="flex gap-2">
-            <button type="submit" className="btn-accent" disabled={pending || !customerId}>
+            <button type="submit" className="btn-accent" disabled={pending || !customerId || !pack}>
               {pending ? 'Creating…' : 'Create subscription'}
             </button>
             <button type="button" className="btn-outline" onClick={() => setOpen(false)}>

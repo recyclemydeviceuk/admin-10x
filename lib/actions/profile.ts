@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { assertPermission } from '@/lib/auth';
+import { requireUser } from '@/lib/auth';
 import { backendFetch } from '@/lib/backend';
 import type { ActionResult } from './orders';
 
@@ -11,7 +11,7 @@ async function result(response: Response, fallback: string): Promise<ActionResul
 }
 
 export async function saveAdminProfile(formData: FormData): Promise<ActionResult> {
-  await assertPermission('settings.view');
+  await requireUser();
   const response = await backendFetch('/api/v1/admin/profile', {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
@@ -27,7 +27,7 @@ export async function saveAdminProfile(formData: FormData): Promise<ActionResult
 
 
 export async function saveSidebarCollapsed(collapsed: boolean): Promise<void> {
-  await assertPermission('settings.view');
+  await requireUser();
   await backendFetch('/api/v1/admin/profile', {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
@@ -36,7 +36,7 @@ export async function saveSidebarCollapsed(collapsed: boolean): Promise<void> {
 }
 
 export async function uploadAdminPhoto(formData: FormData): Promise<ActionResult> {
-  await assertPermission('settings.view');
+  await requireUser();
   const file = formData.get('photo');
   if (!(file instanceof File) || file.size === 0) return { ok: false, message: 'Choose a photo first.' };
   const outbound = new FormData();
@@ -48,18 +48,10 @@ export async function uploadAdminPhoto(formData: FormData): Promise<ActionResult
 }
 
 export async function removeAdminPhoto(): Promise<ActionResult> {
-  await assertPermission('settings.view');
+  await requireUser();
   const response = await backendFetch('/api/v1/admin/profile/photo', { method: 'DELETE' });
   const out = await result(response, 'Profile photo removed.');
   if (out.ok) revalidatePath('/', 'layout');
-  return out;
-}
-
-export async function runSyncNow(): Promise<ActionResult> {
-  await assertPermission('settings.view');
-  const response = await backendFetch('/api/v1/admin/settings/sync/run', { method: 'POST' });
-  const out = await result(response, 'Sync finished.');
-  revalidatePath('/settings');
   return out;
 }
 

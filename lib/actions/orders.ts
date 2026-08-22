@@ -2,17 +2,10 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { readCollection, writeCollection, newId } from '@/lib/db';
+import { readCollection } from '@/lib/db';
 import { assertPermission } from '@/lib/auth';
 import { backendFetch } from '@/lib/backend';
-import {
-  ORDER_STAGES,
-  type Customer,
-  type Order,
-  type OrderStatus,
-  type Product,
-} from '@/lib/types';
-import { logEvent } from '@/lib/events';
+import type { Customer, OrderStatus, Product } from '@/lib/types';
 
 export type ActionResult = { ok: boolean; message: string };
 
@@ -32,13 +25,6 @@ async function backendMutation(
   return { ok: true, message: data.message ?? 'Done.', data };
 }
 
-async function loadOrder(orderId: string) {
-  const orders = await readCollection<Order[]>('orders');
-  const order = orders.find((o) => o.id === orderId);
-  if (!order) throw new Error('Order not found.');
-  return { orders, order };
-}
-
 function touch(path: string) {
   revalidatePath('/orders');
   revalidatePath(path);
@@ -48,44 +34,36 @@ function touch(path: string) {
 /* -------------------------------------------------------------- status */
 
 export async function updateOrderStatus(orderId: string, status: OrderStatus): Promise<ActionResult> {
-  const user = await assertPermission('orders.status');
-  const { orders, order } = await loadOrder(orderId);
-
-  order.status = status;
-  const now = new Date().toISOString();
-
-  // Keep the customer-facing timeline honest: stamp every stage up to the new
-  // one, clear stages beyond it.
-  const reachedIdx = ORDER_STAGES.indexOf(status as (typeof ORDER_STAGES)[number]);
-  if (reachedIdx >= 0) {
-    order.timeline = ORDER_STAGES.map((stage, i) => {
-      const existing = order.timeline.find((e) => e.stage === stage);
-      if (i < reachedIdx) return existing?.at ? existing : { stage, at: now };
-      if (i === reachedIdx) return { stage, at: now };
-      return { stage, at: null };
-    });
-  }
-  if (status === 'cancelled' && order.paymentMethod === 'cod') order.paymentStatus = 'failed';
-
-  order.notes = order.notes ?? [];
-  order.notes.push({ by: user.name, at: now, text: `Status set to ${status}.` });
-
-  await writeCollection('orders', orders);
+  await assertPermission('orders.status');
+  // The server owns the lifecycle: timeline stamps, stock release, the
+  // Shiprocket cancel, the automatic refund and the customer email all
+  // happen there. Writing the status straight to the database skips them.
+  const response = await backendFetch(`/api/v1/admin/orders/${orderId}/status`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ status }),
+  });
+  const data = (await response.json().catch(() => ({}))) as { message?: string; error?: { message?: string } };
+  if (!response.ok) return { ok: false, message: data.error?.message ?? data.message ?? `Backend request failed (${response.status}).` };
   touch(`/orders/${orderId}`);
-  return { ok: true, message: `Order marked ${status.replace(/_/g, ' ')}.` };
+  revalidatePath('/transactions');
+  return {
+    ok: true,
+    message:
+      status === 'cancelled'
+        ? 'Order cancelled — stock is back on the shelf, any courier booking is stopped, and a paid order is being refunded.'
+        : `Order marked ${status.replace(/_/g, ' ')}.`,
+  };
 }
 
 /* --------------------------------------------------------------- notes */
 
 export async function addOrderNote(orderId: string, text: string): Promise<ActionResult> {
-  const user = await assertPermission('orders.notes');
+  await assertPermission('orders.notes');
   const clean = text.trim();
   if (!clean) return { ok: false, message: 'Write a note first.' };
-
-  const { orders, order } = await loadOrder(orderId);
-  order.notes = order.notes ?? [];
-  order.notes.push({ by: user.name, at: new Date().toISOString(), text: clean });
-  await writeCollection('orders', orders);
+  const result = await backendMutation(`/api/v1/admin/orders/${orderId}/notes`, { text: clean });
+  if (!result.ok) return result;
   touch(`/orders/${orderId}`);
   return { ok: true, message: 'Note added.' };
 }
@@ -107,7 +85,7 @@ export async function createShipment(orderId: string): Promise<ActionResult> {
   const result = await backendMutation(`/api/v1/admin/orders/${orderId}/shipment`);
   if (!result.ok) return result;
   touch(`/orders/${orderId}`);
-  return { ok: true, message: 'Shipment created. Assign the AWB when ready.' };
+  return { ok: true, message: 'Shipment booked — courier assigned and pickup requested.' };
 }
 
 /** Retry AWB assignment for an existing shipment. */
@@ -144,15 +122,6 @@ export async function generateInvoiceAction(orderId: string): Promise<ActionResu
   if (!result.ok) return result;
   touch(`/orders/${orderId}`);
   return { ok: true, message: 'Invoice ready — the download link is in the Shipment card.' };
-}
-
-/** Pull live tracking from Shiprocket and sync the order status. */
-export async function syncTrackingAction(orderId: string): Promise<ActionResult> {
-  await assertPermission('fulfilment.track');
-  const result = await backendMutation(`/api/v1/admin/orders/${orderId}/track`);
-  if (!result.ok) return result;
-  touch(`/orders/${orderId}`);
-  return { ok: true, message: `Shiprocket says: ${result.data?.courierStatus ?? 'tracking updated'}.` };
 }
 
 /** Cancel the Shiprocket shipment (before pickup). */
@@ -200,104 +169,66 @@ export async function syncPaymentStatus(orderId: string): Promise<ActionResult> 
 
 /** Manual order — phone / WhatsApp / exchange orders entered by the team. */
 export async function createManualOrder(formData: FormData): Promise<never | ActionResult> {
-  const user = await assertPermission('orders.create');
+  await assertPermission('orders.create');
 
   const customerId = String(formData.get('customerId') ?? '');
   const quantity = Math.max(Number(formData.get('quantity')) || 1, 1);
-  const tierId = String(formData.get('tierId') ?? '10-pack');
+  const tierKey = String(formData.get('tierId') ?? '');
   const paymentMethod = formData.get('paymentMethod') === 'online' ? 'online' : ('cod' as const);
   const note = String(formData.get('note') ?? '').trim();
 
-  const [orders, customers, products] = await Promise.all([
-    readCollection<Order[]>('orders'),
+  const [customers, products] = await Promise.all([
     readCollection<Customer[]>('customers'),
     readCollection<Product[]>('products'),
   ]);
-
   const customer = customers.find((c) => c.id === customerId);
   if (!customer) return { ok: false, message: 'Pick a customer (add them in Customers first).' };
-  const product = products[0];
-  const tier = product?.tiers.find((t) => t.id === tierId) ?? product?.tiers[0];
-  if (!product || !tier) return { ok: false, message: 'No product available to order.' };
+
+  // The pack selector carries "<productId>:<tierId>" so every product's packs
+  // are orderable, not just the first product's.
+  const [productId, tierId] = tierKey.includes(':') ? tierKey.split(':') : [products[0]?.id ?? '', tierKey];
+  const product = products.find((p) => p.id === productId);
+  const tier = product?.tiers.find((t) => t.id === tierId);
+  if (!product || !tier) return { ok: false, message: 'Pick a pack.' };
 
   const address = {
-    fullName: String(formData.get('fullName') ?? customer.name).trim() || customer.name,
-    phone: String(formData.get('phone') ?? customer.phone).trim() || customer.phone,
-    house: String(formData.get('house') ?? '').trim(),
-    street: String(formData.get('street') ?? '').trim(),
-    city: String(formData.get('city') ?? customer.city).trim() || customer.city,
-    state: String(formData.get('state') ?? customer.state).trim() || customer.state,
+    fullName: String(formData.get('fullName') ?? '').trim() || customer.name,
+    phone: String(formData.get('phone') ?? '').trim() || customer.phone,
+    line1: String(formData.get('house') ?? '').trim(),
+    line2: String(formData.get('street') ?? '').trim(),
+    city: String(formData.get('city') ?? '').trim() || customer.city,
+    state: String(formData.get('state') ?? '').trim() || customer.state,
     pincode: String(formData.get('pincode') ?? '').trim(),
   };
-  if (!address.house || !address.street || !address.pincode) {
+  if (!address.line1 || !address.line2 || !address.pincode) {
     return { ok: false, message: 'Fill the full shipping address (house, street, pincode).' };
   }
 
-  const subtotal = tier.oneTimePrice * quantity;
-  const shipping = subtotal >= 999 ? 0 : 79;
-  const now = new Date().toISOString();
-  const refNo = Math.max(1200, ...orders.map((o) => Number(o.reference.split('-')[1]) || 0)) + 1;
-
-  const order: Order = {
-    id: newId('ord'),
-    reference: `10X-${refNo}`,
-    placedAt: now,
-    status: 'placed',
-    customerId: customer.id,
-    customerName: customer.name,
-    customerEmail: customer.email,
-    items: [
-      {
-        sku: `10X-DT-${tier.packets}`,
-        name: product.name,
-        packets: `${tier.packets} packets`,
-        quantity,
-        price: tier.oneTimePrice,
-        productId: product.id,
-        tierId: tier.id,
-        tierName: tier.name,
-      },
-    ],
-    subtotal,
-    shipping,
-    discount: 0,
-    total: subtotal + shipping,
+  // The server prices delivery from the store settings, reserves stock,
+  // numbers the order and confirms a cash order — the same path as checkout.
+  const result = await backendMutation('/api/v1/admin/orders', {
+    customerId,
+    items: [{ productId: product.id, tierId: tier.id, name: product.name, tierName: tier.name, quantity, unitPrice: tier.oneTimePrice }],
     paymentMethod,
-    paymentStatus: paymentMethod === 'cod' ? 'pending' : 'paid',
-    payment: paymentMethod === 'cod' ? { provider: 'cod' } : { provider: 'cashfree' },
     address,
-    timeline: ORDER_STAGES.map((stage, i) => ({ stage, at: i === 0 ? now : null })),
-    channel: 'website',
-    notes: [{ by: user.name, at: now, text: `Manual order created${note ? ` — ${note}` : ''}.` }],
-  };
-
-  orders.unshift(order);
-  await logEvent({
-    type: 'order',
-    title: `New order ${order.reference}`,
-    message: `${customer.name} · ${quantity} × ${tier.name} · ₹${order.total.toLocaleString('en-IN')} (${paymentMethod.toUpperCase()})`,
-    href: `/orders/${order.id}`,
+    note,
   });
-  customer.ordersCount++;
-  customer.totalSpent += order.total;
-  customer.lastOrderAt = now;
-
-  await writeCollection('orders', orders);
-  await writeCollection('customers', customers);
+  if (!result.ok) return result;
+  const id = String(result.data?.order?._id ?? result.data?.order?.id ?? '');
   revalidatePath('/orders');
   revalidatePath('/');
-  redirect(`/orders/${order.id}`);
+  redirect(id ? `/orders/${id}` : '/orders');
 }
 
 /** Hard-delete an order — for test/duplicate entries. Cancelling is usually right. */
 export async function deleteOrder(orderId: string): Promise<ActionResult> {
   await assertPermission('orders.delete');
-  const orders = await readCollection<Order[]>('orders');
-  const idx = orders.findIndex((o) => o.id === orderId);
-  if (idx === -1) return { ok: false, message: 'Order not found.' };
-  const [removed] = orders.splice(idx, 1);
-  await writeCollection('orders', orders);
+  // Through the server so a courier booking is stopped and reserved stock
+  // returns before the record goes.
+  const response = await backendFetch(`/api/v1/admin/orders/${orderId}`, { method: 'DELETE' });
+  const data = (await response.json().catch(() => ({}))) as { message?: string; error?: { message?: string } };
+  if (!response.ok) return { ok: false, message: data.error?.message ?? data.message ?? `Backend request failed (${response.status}).` };
   revalidatePath('/orders');
   revalidatePath('/');
-  return { ok: true, message: `${removed.reference} deleted permanently.` };
+  return { ok: true, message: data.message ?? 'Order deleted permanently.' };
 }

@@ -3,6 +3,7 @@ import { readCollection } from '@/lib/db';
 import { NAV_GROUPS } from '@/lib/nav';
 import type { CustomerQuery, Order, ReturnRequest } from '@/lib/types';
 import { AdminShell } from '@/components/shell/AdminShell';
+import { LiveRefresh } from '@/components/shell/LiveRefresh';
 import { logout } from '@/app/login/actions';
 
 export default async function PanelLayout({ children }: { children: React.ReactNode }) {
@@ -45,6 +46,7 @@ export default async function PanelLayout({ children }: { children: React.ReactN
       badges={badges}
       logout={logout}
     >
+      <LiveRefresh />
       {children}
     </AdminShell>
   );

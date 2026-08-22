@@ -2,19 +2,16 @@
 
 import { useTransition } from 'react';
 import Link from 'next/link';
-import { syncPaymentStatus } from '@/lib/actions/orders';
 import { Icon } from '@/components/Icon';
 import { useToast } from '@/components/Toast';
 
 export function TransactionRowActions({
   orderId,
   isCashfree,
-  canSync,
   canInvoice,
 }: {
   orderId: string;
   isCashfree: boolean;
-  canSync: boolean;
   canInvoice: boolean;
 }) {
   const [pending, start] = useTransition();
@@ -22,18 +19,6 @@ export function TransactionRowActions({
 
   return (
     <div className="flex items-center justify-end gap-1">
-      {isCashfree && canSync ? (
-        <button
-          type="button"
-          disabled={pending}
-          title="Check live status on Cashfree"
-          className="flex h-7 items-center gap-1.5 rounded-md px-2 text-[11px] font-medium text-fg-muted transition-colors hover:bg-accent-soft hover:text-accent-pressed disabled:opacity-50"
-          onClick={() => start(async () => toast(await syncPaymentStatus(orderId)))}
-        >
-          <Icon name="repeat" className={`h-3 w-3 ${pending ? 'animate-spin' : ''}`} />
-          {pending ? 'Checking…' : 'Sync'}
-        </button>
-      ) : null}
       {canInvoice ? (
       <a
         href={`/api/invoice/${orderId}/pdf`}

@@ -240,7 +240,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
                 </Row>
               ))}
             </dl>
-            <PaymentActions orderId={order.id} isCashfree={isCashfree} canSync={can(user, 'transactions.sync')} canInvoice={can(user, 'orders.invoice')} />
+            <PaymentActions orderId={order.id} canInvoice={can(user, 'orders.invoice')} />
           </div>
 
           {/* Shipment */}

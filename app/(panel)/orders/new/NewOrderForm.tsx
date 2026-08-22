@@ -25,7 +25,6 @@ export function NewOrderForm({
 
   const tier = tiers.find((t) => t.id === tierId);
   const subtotal = (tier?.oneTimePrice ?? 0) * quantity;
-  const shipping = subtotal >= 999 ? 0 : 79;
 
   return (
     <form
@@ -131,9 +130,9 @@ export function NewOrderForm({
       <section className="card flex flex-wrap items-center justify-between gap-4">
         <div className="text-body">
           <p className="text-fg-muted">
-            {quantity} × {tier?.name ?? ''} · shipping {shipping === 0 ? 'free' : inr(shipping)}
+            {quantity} × {tier?.name ?? ''} · delivery priced from store settings
           </p>
-          <p className="brand-head mt-1 text-[1.25rem]">Total {inr(subtotal + shipping)}</p>
+          <p className="brand-head mt-1 text-[1.25rem]">Items {inr(subtotal)}</p>
         </div>
         <button type="submit" className="btn-accent px-8 py-3" disabled={pending || !customerId}>
           {pending ? 'Creating…' : 'Create order'}

@@ -35,12 +35,15 @@ export default async function SubscriptionsPage({ searchParams }: { searchParams
     readCollection<Product[]>('products'),
   ]);
 
-  // The suggested cycle price is the catalogue's own subscribe price for the
-  // pack a manual plan would ship — not a number written into this file.
-  const suggestedTier =
-    (products.find((p) => p.status === 'active') ?? products[0])?.tiers.find((t) => t.available) ??
-    (products.find((p) => p.status === 'active') ?? products[0])?.tiers[0];
-  const suggestedCyclePrice = suggestedTier?.subscribePrice || 0;
+  // Every orderable pack, priced at the catalogue's own subscribe price, and
+  // the store's delivery cadence — nothing about a manual plan is invented here.
+  const packs = products
+    .filter((p) => p.status === 'active')
+    .flatMap((p) =>
+      p.tiers.filter((t) => t.available).map((t) => ({ id: `${p.id}:${t.id}`, label: `${p.name} — ${t.name}`, subscribePrice: t.subscribePrice })),
+    );
+  const settings = await readCollection<{ store?: { subscriptionIntervalDays?: number } }>('settings').catch(() => null);
+  const intervalDays = settings?.store?.subscriptionIntervalDays ?? 28;
 
   let subs = allSubs;
   if (params.status) subs = subs.filter((s) => s.status === params.status);
@@ -88,7 +91,8 @@ export default async function SubscriptionsPage({ searchParams }: { searchParams
                   .slice()
                   .sort((a, b) => a.name.localeCompare(b.name))
                   .map((c) => ({ id: c.id, name: c.name, email: c.email }))}
-                defaultPrice={suggestedCyclePrice}
+                packs={packs}
+                intervalDays={intervalDays}
               />
             ) : null}
           </>

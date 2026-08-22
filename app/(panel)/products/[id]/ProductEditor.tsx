@@ -361,6 +361,7 @@ export function ProductEditor({ product, canManage, canDelete, canMedia }: { pro
                     </td>
                     <td className="px-2 py-3">
                       <input name={`tier.${tier.rowId}.stock`} type="number" min={0} defaultValue={tier.stock} disabled={disabled} className="field-input max-w-20" />
+                      <input type="hidden" name={`tier.${tier.rowId}.stockWas`} value={tier.stock} />
                     </td>
                     <td className="px-2 py-3">
                       <input name={`tier.${tier.rowId}.lowStockAt`} type="number" min={0} defaultValue={tier.lowStockAt} disabled={disabled} className="field-input max-w-20" />

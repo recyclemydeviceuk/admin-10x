@@ -147,7 +147,7 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
                 <td className={`${td} whitespace-nowrap text-fg-muted`}>{o.invoiceNo ?? '—'}</td>
                 <td className={td}><DateCell iso={o.payment?.capturedAt ?? o.placedAt} /></td>
                 <td className={td}>
-                  <TransactionRowActions orderId={o.id} isCashfree={isCashfree} canSync={can(user, 'transactions.sync')} canInvoice={can(user, 'orders.invoice')} />
+                  <TransactionRowActions orderId={o.id} isCashfree={isCashfree} canInvoice={can(user, 'orders.invoice')} />
                 </td>
               </tr>
             );

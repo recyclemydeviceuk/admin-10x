@@ -1,6 +1,5 @@
 import 'server-only';
 import crypto from 'crypto';
-import { cache } from 'react';
 import { backendFetch } from './backend';
 
 // =========================================================
@@ -53,19 +52,33 @@ export class DataSourceError extends Error {
 }
 
 /**
- * What this request has read, per collection.
+ * What a writer has read, per collection.
  *
- * `cache()` scopes it to the current request, so two admins acting at the same
- * moment never see each other's read sets. It is sent back with the write so
- * the API can tell "I deleted this" from "someone else added that after I
- * loaded the page" — without it, an unrelated edit silently deletes a
- * colleague's brand-new order.
+ * Sent back with the write so the API can tell "I deleted this" from "someone
+ * else added that after I loaded the page" — without it, an unrelated edit
+ * silently deletes a colleague's brand-new order.
+ *
+ * Two layers, because React's per-request `cache()` does NOT carry state
+ * between a read and a write inside a server action (it came back empty, so
+ * every delete in the panel was being ignored by the API as "not seen"):
+ *   1. the ids are pinned to the exact array `readCollection` returned — the
+ *      actions mutate that same array and hand it to `writeCollection`;
+ *   2. if an action rebuilt the array (filter/map), fall back to the most
+ *      recent read of that collection in this process. A colleague's
+ *      concurrent read only ever widens that set, never narrows it.
  */
-const readSet = cache(() => new Map<CollectionName, string[]>());
+const readSetByArray = new WeakMap<object, string[]>();
+const lastReadIds = new Map<CollectionName, string[]>();
+
+function idsOf(data: unknown): string[] {
+  return Array.isArray(data)
+    ? (data as { id?: string }[]).map((row) => String(row?.id ?? '')).filter(Boolean)
+    : [];
+}
 
 async function bridge<T>(
   name: CollectionName,
-  init: { method: 'GET' } | { method: 'PUT'; data: unknown },
+  init: { method: 'GET' } | { method: 'PUT'; data: unknown; knownIds: string[] },
 ): Promise<T> {
   let response: Response;
   try {
@@ -76,7 +89,7 @@ async function bridge<T>(
         ...(init.method === 'PUT' ? { 'Content-Type': 'application/json' } : {}),
       },
       ...(init.method === 'PUT'
-        ? { body: JSON.stringify({ data: init.data, knownIds: readSet().get(name) ?? [] }) }
+        ? { body: JSON.stringify({ data: init.data, knownIds: init.knownIds }) }
         : {}),
       cache: 'no-store',
     });
@@ -109,16 +122,19 @@ async function bridge<T>(
 export async function readCollection<T>(name: CollectionName): Promise<T> {
   const data = await bridge<T>(name, { method: 'GET' });
   if (Array.isArray(data)) {
-    readSet().set(
-      name,
-      (data as { id?: string }[]).map((row) => String(row?.id ?? '')).filter(Boolean),
-    );
+    const ids = idsOf(data);
+    readSetByArray.set(data as object, ids);
+    lastReadIds.set(name, ids);
   }
   return data;
 }
 
 export async function writeCollection<T>(name: CollectionName, data: T): Promise<void> {
-  await bridge<unknown>(name, { method: 'PUT', data });
+  const pinned = Array.isArray(data) ? readSetByArray.get(data as object) : undefined;
+  // Whatever is being written is by definition "seen"; union it with the read
+  // set so a record created in this very action is never treated as foreign.
+  const knownIds = Array.from(new Set([...(pinned ?? lastReadIds.get(name) ?? []), ...idsOf(data)]));
+  await bridge<unknown>(name, { method: 'PUT', data, knownIds });
 }
 
 /**

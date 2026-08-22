@@ -60,37 +60,21 @@ export async function approveReturn(
 }
 
 export async function rejectReturn(returnId: string, reason: string): Promise<ActionResult> {
-  const user = await assertPermission('returns.reject');
+  await assertPermission('returns.reject');
   const clean = reason.trim();
-  if (!clean) return { ok: false, message: 'Tell the customer why — the reason is shown to them.' };
-
-  const { returns, ret } = await loadReturn(returnId);
-  if (ret.status !== 'requested') return { ok: false, message: 'Only requested returns can be rejected.' };
-
-  const now = new Date().toISOString();
-  ret.status = 'rejected';
-  ret.rejectReason = clean;
-  ret.resolvedAt = now;
-  ret.notes.push({ by: user.name, at: now, text: `Rejected: ${clean}` });
-
-  await writeCollection('returns', returns);
-  touch(returnId);
-  return { ok: true, message: `${ret.reference} rejected.` };
+  if (clean.length < 10) return { ok: false, message: 'Tell the customer why — a clear reason (10+ characters) is shown to them.' };
+  // Server-side so the customer is emailed and the timeline is stamped.
+  const result = await backendReturnAction(returnId, 'reject', { reason: clean });
+  return result.ok ? { ok: true, message: 'Return rejected — the customer has been told why.' } : result;
 }
 
-/** The parcel arrived at the warehouse — unlocks the refund step. */
+/** The parcel arrived at the warehouse — restocks the items and unlocks the refund step. */
 export async function markReturnReceived(returnId: string): Promise<ActionResult> {
-  const user = await assertPermission('returns.receive');
-  const { returns, ret } = await loadReturn(returnId);
-  if (ret.status !== 'approved') return { ok: false, message: 'Approve the return (and wait for pickup) first.' };
-
-  const now = new Date().toISOString();
-  ret.status = 'received';
-  ret.notes.push({ by: user.name, at: now, text: 'Parcel received at the warehouse.' });
-
-  await writeCollection('returns', returns);
-  touch(returnId);
-  return { ok: true, message: 'Marked received — you can issue the refund now.' };
+  await assertPermission('returns.receive');
+  const result = await backendReturnAction(returnId, 'receive');
+  if (!result.ok) return result;
+  revalidatePath('/inventory');
+  return { ok: true, message: 'Marked received — items are back in stock. You can issue the refund now.' };
 }
 
 /**
@@ -107,12 +91,9 @@ export async function refundReturn(returnId: string): Promise<ActionResult> {
 }
 
 export async function addReturnNote(returnId: string, text: string): Promise<ActionResult> {
-  const user = await assertPermission('returns.notes');
+  await assertPermission('returns.notes');
   const clean = text.trim();
   if (!clean) return { ok: false, message: 'Write a note first.' };
-  const { returns, ret } = await loadReturn(returnId);
-  ret.notes.push({ by: user.name, at: new Date().toISOString(), text: clean });
-  await writeCollection('returns', returns);
-  touch(returnId);
-  return { ok: true, message: 'Note added.' };
+  const result = await backendReturnAction(returnId, 'notes', { text: clean });
+  return result.ok ? { ok: true, message: 'Note added.' } : result;
 }

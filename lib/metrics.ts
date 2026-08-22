@@ -56,10 +56,7 @@ export async function getMetrics(range: MetricsRange) {
       ...customers.map((c) => c.joinedAt),
     ].sort();
     const first = firstDates[0] ? new Date(firstDates[0]) : now;
-    rangeDays = Math.min(
-      Math.max(Math.ceil((now.getTime() - first.getTime()) / 86400_000) + 1, 7),
-      365,
-    );
+    rangeDays = Math.max(Math.ceil((now.getTime() - first.getTime()) / 86400_000) + 1, 7);
   } else {
     rangeDays = range;
   }

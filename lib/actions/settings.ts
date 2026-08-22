@@ -83,6 +83,42 @@ export async function saveSubscriptionSettings(formData: FormData): Promise<Acti
   return patch('/api/v1/admin/settings/subscriptions', body);
 }
 
+export type StoreSettings = {
+  name: string;
+  supportEmail: string;
+  supportPhone: string;
+  codEnabled: boolean;
+  warehouse: { name: string; address: string; city: string; state: string; pincode: string; phone: string };
+};
+
+export async function saveStoreSettings(formData: FormData): Promise<ActionResult> {
+  await assertPermission('settings.delivery');
+  const s = (k: string) => String(formData.get(k) ?? '').trim();
+  const body = {
+    name: s('name'),
+    supportEmail: s('supportEmail'),
+    supportPhone: s('supportPhone'),
+    codEnabled: formData.get('codEnabled') === 'on',
+    warehouse: {
+      name: s('whName'),
+      address: s('whAddress'),
+      city: s('whCity'),
+      state: s('whState'),
+      pincode: s('whPincode'),
+      phone: s('whPhone'),
+    },
+  };
+  if (!body.name) return { ok: false, message: 'The store needs a name.' };
+  if (!/^\S+@\S+\.\S+$/.test(body.supportEmail)) return { ok: false, message: 'Enter a valid support email.' };
+  if (body.warehouse.pincode && !/^\d{6}$/.test(body.warehouse.pincode)) return { ok: false, message: 'Warehouse pincode must be 6 digits.' };
+  return patch('/api/v1/admin/settings/store', body);
+}
+
+export async function saveAutoShipments(enabled: boolean): Promise<ActionResult> {
+  await assertPermission('settings.syncing');
+  return patch('/api/v1/admin/settings/syncing', { autoShipments: enabled });
+}
+
 export async function saveComingSoon(enabled: boolean): Promise<ActionResult> {
   await assertPermission('settings.maintenance');
   return patch('/api/v1/admin/settings/coming-soon', { enabled });

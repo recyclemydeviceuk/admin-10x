@@ -64,13 +64,22 @@ export async function saveProduct(productId: string, formData: FormData): Promis
     let id = isNew ? `${packets}-pack` : rowId;
     while (tiers.some((t) => t.id === id)) id = `${id}-x`;
 
+    // Stock moves while the editor is open (orders, returns). Apply what the
+    // team changed as a delta on top of the live figure, so saving a name
+    // edit never puts sold units back on the shelf.
+    const live = isNew ? null : product.tiers.find((t) => t.id === rowId);
+    const stockWasRaw = g('stockWas');
+    const stockWas = stockWasRaw === null ? null : Number(stockWasRaw);
+    const liveStock =
+      live && stockWas !== null && Number.isFinite(stockWas) ? Math.max(live.stock + (stock - stockWas), 0) : stock;
+
     tiers.push({
       id,
       name: tierName,
       packets,
       oneTimePrice: oneTime,
       subscribePrice: subscribe,
-      stock,
+      stock: liveStock,
       lowStockAt: Math.max(Number(g('lowStockAt')) || 0, 0),
       available: g('available') === 'on',
     });
@@ -129,6 +138,7 @@ export async function createProduct(formData: FormData): Promise<never | ActionR
     // editor's "Add pack" is where the real ones get entered.
     tiers: [],
     seo: { title: name, description: '' },
+    storefront: { ...DEFAULT_STOREFRONT },
     updatedAt: new Date().toISOString(),
   };
   products.push(product);

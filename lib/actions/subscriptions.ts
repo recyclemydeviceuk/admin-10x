@@ -1,39 +1,49 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { readCollection, writeCollection, newId } from '@/lib/db';
+import { readCollection } from '@/lib/db';
 import { backendFetch } from '@/lib/backend';
 import { assertPermission } from '@/lib/auth';
-import type { Customer, Product, Subscription, SubscriptionStatus } from '@/lib/types';
+import type { Product, SubscriptionStatus } from '@/lib/types';
 import type { ActionResult } from './orders';
-import { logEvent } from '@/lib/events';
 
+async function call(path: string, init: RequestInit): Promise<{ ok: boolean; message: string; data: Record<string, any> }> {
+  let response: Response;
+  try {
+    response = await backendFetch(path, init);
+  } catch {
+    return { ok: false, message: 'Can’t reach the backend — nothing was changed.', data: {} };
+  }
+  const data = (await response.json().catch(() => ({}))) as Record<string, any>;
+  if (!response.ok) return { ok: false, message: data.error?.message ?? data.message ?? `Backend request failed (${response.status}).`, data };
+  return { ok: true, message: data.message ?? 'Done.', data };
+}
+
+/**
+ * Pause / resume / cancel through the server, which mirrors the change to
+ * the Cashfree mandate, re-dates the next delivery from the plan's own
+ * cadence, updates the customer's subscriber flag and emails them.
+ */
 export async function setSubscriptionStatus(
   subId: string,
   status: SubscriptionStatus,
 ): Promise<ActionResult> {
   await assertPermission(status === 'cancelled' ? 'subscriptions.cancel' : 'subscriptions.pause');
-  const subs = await readCollection<Subscription[]>('subscriptions');
-  const sub = subs.find((s) => s.id === subId);
-  if (!sub) return { ok: false, message: 'Subscription not found.' };
-
-  sub.status = status;
-  if (status === 'active') {
-    const next = new Date();
-    next.setDate(next.getDate() + 28);
-    sub.nextDelivery = next.toISOString();
-  } else {
-    sub.nextDelivery = null;
-  }
-
-  await writeCollection('subscriptions', subs);
+  const result = await call(`/api/v1/admin/subscriptions/${encodeURIComponent(subId)}/status`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ status }),
+  });
+  if (!result.ok) return result;
   revalidatePath('/subscriptions');
+  revalidatePath('/customers');
+  const sub = result.data.subscription as { reference?: string; nextDelivery?: string | null; intervalDays?: number } | undefined;
   return {
     ok: true,
     message:
       status === 'active'
-        ? `${sub.reference} resumed — next delivery in 4 weeks.`
-        : `${sub.reference} ${status}.`,
+        ? `${sub?.reference ?? 'Plan'} resumed — next delivery ${sub?.nextDelivery ? new Date(sub.nextDelivery).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : 'scheduled'}.`
+        : `${sub?.reference ?? 'Plan'} ${status}.`,
   };
 }
 
@@ -42,68 +52,53 @@ export async function createSubscription(formData: FormData): Promise<ActionResu
   await assertPermission('subscriptions.create');
 
   const customerId = String(formData.get('customerId') ?? '');
+  const packKey = String(formData.get('pack') ?? '');
   const price = Number(formData.get('price'));
+  const quantity = Math.max(Number(formData.get('quantity')) || 1, 1);
   const nextDelivery = String(formData.get('nextDelivery') ?? '');
+  if (!customerId) return { ok: false, message: 'Pick a customer.' };
+  if (!packKey.includes(':')) return { ok: false, message: 'Pick a pack.' };
   if (!Number.isFinite(price) || price <= 0) return { ok: false, message: 'The cycle price must be a positive number.' };
   if (!nextDelivery) return { ok: false, message: 'Pick the first delivery date.' };
 
-  const [subs, customers, products] = await Promise.all([
-    readCollection<Subscription[]>('subscriptions'),
-    readCollection<Customer[]>('customers'),
-    readCollection<Product[]>('products'),
-  ]);
-  const customer = customers.find((c) => c.id === customerId);
-  if (!customer) return { ok: false, message: 'Pick a customer.' };
+  const [productId, tierId] = packKey.split(':');
+  const products = await readCollection<Product[]>('products');
+  const product = products.find((p) => p.id === productId);
+  const tier = product?.tiers.find((t) => t.id === tierId);
+  if (!product || !tier) return { ok: false, message: 'That pack is no longer in the catalogue.' };
 
-  // Bind the plan to a real pack — without it nothing can be shipped when the
-  // cycle comes round.
-  const product = products.find((p) => p.status === 'active') ?? products[0];
-  const tier = product?.tiers.find((t) => t.available) ?? product?.tiers[0];
-  if (!product || !tier) return { ok: false, message: 'No product available to subscribe to.' };
+  // Cadence comes from Settings → Subscriptions, the same as a storefront plan.
+  const settings = await readCollection<{ store?: { subscriptionIntervalDays?: number } }>('settings');
+  const intervalDays = settings?.store?.subscriptionIntervalDays ?? 28;
 
-  const refNo = Math.max(200, ...subs.map((s) => Number(s.reference.split('-').pop()) || 0)) + 1;
-  subs.unshift({
-    id: newId('sub'),
-    reference: `10X-SUB-${refNo}`,
-    customerId: customer.id,
-    customerName: customer.name,
-    productId: product.id,
-    tierId: tier.id,
-    quantity: 1,
-    sku: `${product.slug.toUpperCase()}-${tier.packets}-SUB`,
-    productName: `${product.name} — ${tier.name}`,
-    packets: `${tier.packets} Stick Packets`,
-    price,
-    cadence: 'Every 4 weeks',
-    status: 'active',
-    startedAt: new Date().toISOString(),
-    nextDelivery: new Date(nextDelivery).toISOString(),
-    cyclesDelivered: 0,
+  const result = await call('/api/v1/admin/subscriptions', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      customerId,
+      productId: product.id,
+      tierId: tier.id,
+      planName: `${product.name} — ${tier.name}`,
+      quantity,
+      price,
+      intervalDays,
+      nextDelivery: new Date(nextDelivery).toISOString(),
+    }),
   });
-  customer.hasSubscription = true;
-
-  await writeCollection('subscriptions', subs);
-  await writeCollection('customers', customers);
-  await logEvent({
-    type: 'subscription',
-    title: `New subscription for ${customer.name}`,
-    message: `₹${price.toLocaleString('en-IN')} every 4 weeks · first delivery ${new Date(nextDelivery).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`,
-    href: '/subscriptions',
-  });
+  if (!result.ok) return result;
   revalidatePath('/subscriptions');
-  return { ok: true, message: `Subscription created for ${customer.name}.` };
+  revalidatePath('/customers');
+  return { ok: true, message: `Subscription created — ${product.name} ${tier.name}, every ${intervalDays} days.` };
 }
 
 /** Hard-delete a subscription record — cancelling is usually right. */
 export async function deleteSubscription(subId: string): Promise<ActionResult> {
   await assertPermission('subscriptions.delete');
-  const subs = await readCollection<Subscription[]>('subscriptions');
-  const idx = subs.findIndex((s) => s.id === subId);
-  if (idx === -1) return { ok: false, message: 'Subscription not found.' };
-  const [removed] = subs.splice(idx, 1);
-  await writeCollection('subscriptions', subs);
+  const result = await call(`/api/v1/admin/subscriptions/${encodeURIComponent(subId)}`, { method: 'DELETE' });
+  if (!result.ok) return result;
   revalidatePath('/subscriptions');
-  return { ok: true, message: `${removed.reference} deleted.` };
+  revalidatePath('/customers');
+  return { ok: true, message: result.message };
 }
 
 /**

@@ -15,7 +15,7 @@ export default async function NewOrderPage() {
   ]);
 
   const tiers = products.flatMap((p) =>
-    p.tiers.filter((t) => t.available).map((t) => ({ id: t.id, name: `${p.name} ${t.name}`, packets: t.packets, oneTimePrice: t.oneTimePrice })),
+    p.tiers.filter((t) => t.available).map((t) => ({ id: `${p.id}:${t.id}`, name: `${p.name} ${t.name}`, packets: t.packets, oneTimePrice: t.oneTimePrice })),
   );
 
   return (

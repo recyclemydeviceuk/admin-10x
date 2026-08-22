@@ -3,7 +3,6 @@
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { Icon } from '@/components/Icon';
-import { RefreshButton } from './RefreshButton';
 import { DATE_FILTER_OPTIONS } from '@/lib/list';
 
 export type FilterDef = {
@@ -173,9 +172,6 @@ export function FilterBar({
         </button>
       ) : null}
 
-      <div className="ml-auto">
-        <RefreshButton />
-      </div>
     </div>
   );
 }

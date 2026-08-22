@@ -18,7 +18,7 @@ function parseCouponForm(formData: FormData) {
 
   if (!code) return { error: 'Give the coupon a code.' };
   if (!Number.isFinite(value) || value <= 0) return { error: 'The discount value must be a positive number.' };
-  if (type === 'percent' && value > 100) return { error: 'A percent discount can’t exceed 100.' };
+  if (type === 'percent' && value > 90) return { error: 'A percent discount can’t exceed 90.' };
 
   return {
     coupon: {

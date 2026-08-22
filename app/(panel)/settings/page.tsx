@@ -2,17 +2,17 @@ import Link from 'next/link';
 import { requireUser } from '@/lib/auth';
 import { backendFetch } from '@/lib/backend';
 import { PageHeader } from '@/components/ui';
-import { RefreshButton } from '@/components/list/RefreshButton';
 import { Icon } from '@/components/Icon';
 import { BackupsPanel } from './BackupsPanel';
 import { fetchBackupStatus } from '@/lib/actions/backups';
 import { PasswordPanel, ProfilePanel, SyncingPanel } from './ProfileSettings';
 import { DeliveryPanel } from './DeliveryPanel';
 import { SubscriptionsPanel } from './SubscriptionsPanel';
+import { StorePanel } from './StorePanel';
 import { ComingSoonPanel } from './ComingSoonPanel';
 import { FaceLockPanel } from './FaceLockPanel';
 import { can } from '@/lib/auth';
-import { listSignups, type DeliverySettings, type SignupRow, type SubscriptionSettings } from '@/lib/actions/settings';
+import { listSignups, type DeliverySettings, type SignupRow, type SubscriptionSettings, type StoreSettings } from '@/lib/actions/settings';
 
 export const metadata = { title: 'Settings' };
 export const dynamic = 'force-dynamic';
@@ -22,16 +22,17 @@ export const dynamic = 'force-dynamic';
 const TABS = [
   { key: 'profile', label: 'Profile', icon: 'users', permission: '' },
   { key: 'face-lock', label: 'Set a Face Lock', icon: 'scan', permission: '' },
+  { key: 'store', label: 'Store & warehouse', icon: 'box', permission: 'settings.view' },
   { key: 'delivery', label: 'Delivery', icon: 'truck', permission: 'settings.view' },
   { key: 'subscriptions', label: 'Subscriptions', icon: 'repeat', permission: 'settings.view' },
   { key: 'coming-soon', label: 'Coming soon', icon: 'eye-off', permission: 'settings.maintenance' },
-  { key: 'backups', label: 'Backups', icon: 'download', permission: 'settings.view' },
+  { key: 'backups', label: 'Backups', icon: 'download', permission: 'settings.backups' },
   { key: 'syncing', label: 'Syncing', icon: 'repeat', permission: 'settings.view' },
 ] as const;
 
 type TabKey = (typeof TABS)[number]['key'];
 
-type SyncState = { lastRunAt: string | null; log: { at: string; text: string }[] };
+type SyncState = { lastRunAt: string | null; log: { at: string; text: string }[]; autoShipments?: boolean };
 
 async function loadSyncState(): Promise<SyncState> {
   const response = await backendFetch('/api/v1/admin/settings');
@@ -96,6 +97,31 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     }
   }
 
+  let storeSettings: StoreSettings = {
+    name: '10X', supportEmail: '', supportPhone: '', codEnabled: true,
+    warehouse: { name: '', address: '', city: '', state: '', pincode: '', phone: '' },
+  };
+  if (tab === 'store') {
+    const response = await backendFetch('/api/v1/admin/settings');
+    if (response.ok) {
+      const body = (await response.json().catch(() => ({}))) as {
+        settings?: { store?: Partial<StoreSettings>; warehouse?: Partial<StoreSettings['warehouse']> };
+      };
+      const st = body.settings?.store ?? {};
+      const wh = body.settings?.warehouse ?? {};
+      storeSettings = {
+        name: st.name ?? '10X',
+        supportEmail: st.supportEmail ?? '',
+        supportPhone: st.supportPhone ?? '',
+        codEnabled: st.codEnabled ?? true,
+        warehouse: {
+          name: wh.name ?? '', address: wh.address ?? '', city: wh.city ?? '',
+          state: wh.state ?? '', pincode: wh.pincode ?? '', phone: wh.phone ?? '',
+        },
+      };
+    }
+  }
+
   let subscriptionSettings: SubscriptionSettings = { subscriptionIntervalDays: 28, autopayReminderEveryDays: 3, autopayReminderMax: 5 };
   if (tab === 'subscriptions') {
     const response = await backendFetch('/api/v1/admin/settings');
@@ -116,7 +142,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
 
   return (
     <>
-      <PageHeader kicker="Admin" title="Settings" actions={<RefreshButton />} />
+      <PageHeader kicker="Admin" title="Settings" />
       <div className="scroll-x mb-6 flex gap-1 border-b border-paper-200">
         {visibleTabs.map((item) => (
           <Link key={item.key} href={`/settings?tab=${item.key}`} className={`flex items-center gap-2 whitespace-nowrap border-b-2 px-4 py-2.5 text-[12.5px] font-medium ${tab === item.key ? 'border-accent-pressed font-semibold text-fg' : 'border-transparent text-fg-muted hover:text-fg'}`}>
@@ -130,10 +156,11 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         {tab === 'profile' ? (<><ProfilePanel profile={profile} isPrimary={user.id === 'primary'} /><PasswordPanel isPrimary={user.id === 'primary'} /></>) : null}
         {tab === 'face-lock' ? <FaceLockPanel /> : null}
         {tab === 'coming-soon' ? <ComingSoonPanel enabled={comingSoon} total={signupData.total} signups={signupData.signups} /> : null}
+        {tab === 'store' ? <StorePanel settings={storeSettings} canEdit={can(user, 'settings.delivery')} /> : null}
         {tab === 'delivery' ? <DeliveryPanel delivery={delivery} canEdit={can(user, 'settings.delivery')} /> : null}
         {tab === 'subscriptions' ? <SubscriptionsPanel settings={subscriptionSettings} canEdit={can(user, 'settings.delivery')} /> : null}
         {tab === 'backups' ? <BackupsPanel status={await fetchBackupStatus()} canRun /> : null}
-        {tab === 'syncing' ? <SyncingPanel lastRunAt={syncState.lastRunAt} log={syncState.log} /> : null}
+        {tab === 'syncing' ? <SyncingPanel lastRunAt={syncState.lastRunAt} log={syncState.log} autoShipments={Boolean(syncState.autoShipments)} canEdit={can(user, 'settings.syncing')} /> : null}
       </div>
     </>
   );

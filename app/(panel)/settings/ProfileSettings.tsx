@@ -2,10 +2,10 @@
 
 import { useState, useTransition } from 'react';
 import { useToast } from '@/components/Toast';
+import { saveAutoShipments } from '@/lib/actions/settings';
 import {
   changeOwnPassword,
   removeAdminPhoto,
-  runSyncNow,
   saveAdminProfile,
   uploadAdminPhoto,
 } from '@/lib/actions/profile';
@@ -168,21 +168,59 @@ export function PasswordPanel({ isPrimary }: { isPrimary: boolean }) {
   );
 }
 
-export function SyncingPanel({ lastRunAt, log }: { lastRunAt: string | null; log: { at: string; text: string }[] }) {
+export function SyncingPanel({
+  lastRunAt,
+  log,
+  autoShipments,
+  canEdit,
+}: {
+  lastRunAt: string | null;
+  log: { at: string; text: string }[];
+  autoShipments: boolean;
+  canEdit: boolean;
+}) {
   const [pending, start] = useTransition();
+  const [enabled, setEnabled] = useState(autoShipments);
   const { toast } = useToast();
   return (
     <div className="space-y-4">
+      <div className="card">
+        <h2 className="text-title">Store syncing</h2>
+        <p className="mt-1 text-body-sm text-fg-muted">
+          Payments, courier tracking, subscription cycles and auto-pay reminders sync themselves from the backend every
+          minute, and Cashfree / Shiprocket push events in as they happen. Nothing here needs a button.
+        </p>
+        <p className="mt-3 text-caption text-fg-subtle">Last sync: {lastRunAt ? new Date(lastRunAt).toLocaleString('en-IN') : 'Not run yet'}</p>
+      </div>
+
       <div className="card flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h2 className="text-title">Store syncing</h2>
-          <p className="mt-1 text-body-sm text-fg-muted">Payments, shipments, tracking, and subscriptions sync automatically from the backend.</p>
-          <p className="mt-3 text-caption text-fg-subtle">Last sync: {lastRunAt ? new Date(lastRunAt).toLocaleString('en-IN') : 'Not run yet'}</p>
+        <div className="min-w-0">
+          <h3 className="text-body font-semibold">Auto-book shipments</h3>
+          <p className="mt-1 text-body-sm text-fg-muted">
+            When on, every paid (or confirmed cash-on-delivery) order books a Shiprocket shipment and courier within a
+            minute, with no click. When off, orders wait for “Create shipment” on the order page. Each booking is a real
+            courier charge — keep this off while placing test orders.
+          </p>
         </div>
-        <button className="btn-accent" disabled={pending} onClick={() => start(async () => toast(await runSyncNow()))}>
-          {pending ? 'Syncing…' : 'Sync now'}
+        <button
+          type="button"
+          role="switch"
+          aria-checked={enabled}
+          disabled={!canEdit || pending}
+          onClick={() =>
+            start(async () => {
+              const next = !enabled;
+              const out = await saveAutoShipments(next);
+              if (out.ok) setEnabled(next);
+              toast(out);
+            })
+          }
+          className={`relative h-7 w-12 shrink-0 rounded-full transition-colors disabled:opacity-50 ${enabled ? 'bg-accent' : 'bg-paper-300'}`}
+        >
+          <span className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all ${enabled ? 'left-6' : 'left-1'}`} />
         </button>
       </div>
+
       <div className="card">
         <h3 className="text-body font-semibold">Recent activity</h3>
         {log.length ? (

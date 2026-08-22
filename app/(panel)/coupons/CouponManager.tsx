@@ -80,7 +80,49 @@ function CouponForm({
           </div>
         </div>
         <input type="hidden" name="type" value={type} />
-        <input type="hidden" name="active" value="on" />
+      </div>
+
+      <div>
+        <label className="field-label" htmlFor="description">Shown on the cart as</label>
+        <input
+          id="description"
+          name="description"
+          defaultValue={coupon?.description}
+          placeholder="₹100 off orders over ₹999"
+          className="field-input"
+        />
+        <p className="mt-1.5 text-caption text-fg-subtle">Leave empty to keep the coupon unlisted — customers must type it.</p>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <label className="field-label" htmlFor="minOrder">Minimum order (₹)</label>
+          <input id="minOrder" name="minOrder" type="number" min={0} step={1} defaultValue={coupon?.minOrder ?? 0} className="field-input" />
+        </div>
+        {type === 'percent' ? (
+          <div>
+            <label className="field-label" htmlFor="maxDiscount">Max discount (₹)</label>
+            <input id="maxDiscount" name="maxDiscount" type="number" min={0} step={1} defaultValue={coupon?.maxDiscount ?? ''} placeholder="No cap" className="field-input" />
+          </div>
+        ) : null}
+        <div>
+          <label className="field-label" htmlFor="usageLimit">Total uses</label>
+          <input id="usageLimit" name="usageLimit" type="number" min={0} step={1} defaultValue={coupon?.usageLimit ?? ''} placeholder="Unlimited" className="field-input" />
+        </div>
+        <div>
+          <label className="field-label" htmlFor="perCustomerLimit">Uses per customer</label>
+          <input id="perCustomerLimit" name="perCustomerLimit" type="number" min={0} step={1} defaultValue={coupon?.perCustomerLimit ?? ''} placeholder="Unlimited" className="field-input" />
+        </div>
+        <div>
+          <label className="field-label" htmlFor="expiresAt">Expires</label>
+          <input id="expiresAt" name="expiresAt" type="date" defaultValue={coupon?.expiresAt ? coupon.expiresAt.slice(0, 10) : ''} className="field-input" />
+        </div>
+        <div className="flex items-end">
+          <label className="flex cursor-pointer items-center gap-2 text-body-sm">
+            <input type="checkbox" name="active" defaultChecked={coupon ? coupon.active : true} className="h-4 w-4 accent-[var(--color-accent)]" />
+            Active
+          </label>
+        </div>
       </div>
 
       <div className="flex gap-2 pt-1">

@@ -405,8 +405,6 @@ export type Settings = {
   };
   syncing: {
     autoShipments: boolean;
-    autoTrackingSync: boolean;
-    autoPaymentSync: boolean;
   };
   /** Where Shiprocket delivers returned parcels. */
   warehouse: {
