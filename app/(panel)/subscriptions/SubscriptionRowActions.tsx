@@ -1,7 +1,7 @@
 'use client';
 
 import { useTransition } from 'react';
-import { setSubscriptionStatus, deleteSubscription } from '@/lib/actions/subscriptions';
+import { setSubscriptionStatus, deleteSubscription, sendAutopayReminder } from '@/lib/actions/subscriptions';
 import type { SubscriptionStatus } from '@/lib/types';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/Confirm';
@@ -12,12 +12,15 @@ export function SubscriptionRowActions({
   canPause,
   canCancel,
   canDelete,
+  canRemind = false,
 }: {
   subId: string;
   status: SubscriptionStatus;
   canPause: boolean;
   canCancel: boolean;
   canDelete: boolean;
+  /** Active plan without a mandate and the customer hasn't declined. */
+  canRemind?: boolean;
 }) {
   const [pending, start] = useTransition();
   const { toast } = useToast();
@@ -42,6 +45,17 @@ export function SubscriptionRowActions({
     <div className="flex gap-3">
       {status === 'active' ? (
         <>
+          {canRemind ? (
+          <button
+            type="button"
+            disabled={pending}
+            title="Email the customer a link to approve auto-pay"
+            className={`${linkClass} text-accent-pressed hover:text-fg`}
+            onClick={() => start(async () => toast(await sendAutopayReminder(subId)))}
+          >
+            Send auto-pay link
+          </button>
+          ) : null}
           {canPause ? (
           <button type="button" disabled={pending} className={`${linkClass} text-fg-muted hover:text-fg`} onClick={() => act('paused')}>
             Pause

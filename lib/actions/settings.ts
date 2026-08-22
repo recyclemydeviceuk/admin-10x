@@ -58,6 +58,31 @@ export async function saveDelivery(formData: FormData): Promise<ActionResult> {
   return patch('/api/v1/admin/settings/delivery', body);
 }
 
+export type SubscriptionSettings = {
+  subscriptionIntervalDays: number;
+  autopayReminderEveryDays: number;
+  autopayReminderMax: number;
+};
+
+export async function saveSubscriptionSettings(formData: FormData): Promise<ActionResult> {
+  await assertPermission('settings.delivery');
+  const body = {
+    subscriptionIntervalDays: Number(formData.get('subscriptionIntervalDays')),
+    autopayReminderEveryDays: Number(formData.get('autopayReminderEveryDays')),
+    autopayReminderMax: Number(formData.get('autopayReminderMax')),
+  };
+  if (!Number.isInteger(body.subscriptionIntervalDays) || body.subscriptionIntervalDays < 7 || body.subscriptionIntervalDays > 90) {
+    return { ok: false, message: 'Deliver every 7–90 days.' };
+  }
+  if (!Number.isInteger(body.autopayReminderEveryDays) || body.autopayReminderEveryDays < 0 || body.autopayReminderEveryDays > 30) {
+    return { ok: false, message: 'Remind every 0–30 days (0 turns reminders off).' };
+  }
+  if (!Number.isInteger(body.autopayReminderMax) || body.autopayReminderMax < 0 || body.autopayReminderMax > 20) {
+    return { ok: false, message: 'Send at most 0–20 reminders per plan.' };
+  }
+  return patch('/api/v1/admin/settings/subscriptions', body);
+}
+
 export async function saveComingSoon(enabled: boolean): Promise<ActionResult> {
   await assertPermission('settings.maintenance');
   return patch('/api/v1/admin/settings/coming-soon', { enabled });

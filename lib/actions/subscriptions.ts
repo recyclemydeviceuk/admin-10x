@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { readCollection, writeCollection, newId } from '@/lib/db';
+import { backendFetch } from '@/lib/backend';
 import { assertPermission } from '@/lib/auth';
 import type { Customer, Product, Subscription, SubscriptionStatus } from '@/lib/types';
 import type { ActionResult } from './orders';
@@ -103,4 +104,24 @@ export async function deleteSubscription(subId: string): Promise<ActionResult> {
   await writeCollection('subscriptions', subs);
   revalidatePath('/subscriptions');
   return { ok: true, message: `${removed.reference} deleted.` };
+}
+
+/**
+ * Email the customer the auto-pay set-up link right now. A mandate can only
+ * be approved by the customer in their own bank/UPI app, so this is what
+ * "set up auto-pay for them" means from the team's side. The backend refuses
+ * if the customer has chosen pay on delivery.
+ */
+export async function sendAutopayReminder(subId: string): Promise<ActionResult> {
+  await assertPermission('subscriptions.edit');
+  let response: Response;
+  try {
+    response = await backendFetch(`/api/v1/admin/subscriptions/${encodeURIComponent(subId)}/autopay/remind`, { method: 'POST' });
+  } catch {
+    return { ok: false, message: 'Can’t reach the backend — nothing was sent.' };
+  }
+  const data = (await response.json().catch(() => ({}))) as { message?: string; reminders?: number };
+  if (!response.ok) return { ok: false, message: data.message ?? 'The reminder was not sent.' };
+  revalidatePath('/subscriptions');
+  return { ok: true, message: `Auto-pay set-up email sent (reminder ${data.reminders ?? ''}).` };
 }

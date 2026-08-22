@@ -24,9 +24,10 @@ export default async function SubscriptionsPage({ searchParams }: { searchParams
   const q = (params.q ?? '').trim().toLowerCase();
   const canCreate = can(user, 'subscriptions.create');
   const canPause = can(user, 'subscriptions.pause');
+  const canEdit = can(user, 'subscriptions.edit');
   const canCancel = can(user, 'subscriptions.cancel');
   const canDelete = can(user, 'subscriptions.delete');
-  const canAct = canPause || canCancel || canDelete;
+  const canAct = canPause || canCancel || canDelete || canEdit;
 
   const [allSubs, customers, products] = await Promise.all([
     readCollection<Subscription[]>('subscriptions'),
@@ -158,6 +159,12 @@ export default async function SubscriptionsPage({ searchParams }: { searchParams
                     <Pill tone="accent">auto-pay</Pill>
                   ) : s.autopay === 'failed' || s.autopayLastCharge === 'failed' ? (
                     <Pill tone="warning">auto-pay issue</Pill>
+                  ) : s.autopay === 'initialized' ? (
+                    <Pill tone="warning">auto-pay pending</Pill>
+                  ) : s.autopayDeclined ? (
+                    <Pill tone="neutral">pay on delivery</Pill>
+                  ) : s.status === 'active' ? (
+                    <Pill tone="neutral">{s.autopayReminders ? `reminded ×${s.autopayReminders}` : 'no auto-pay'}</Pill>
                   ) : null}
                 </span>
               </td>
@@ -167,7 +174,14 @@ export default async function SubscriptionsPage({ searchParams }: { searchParams
               {canAct ? (
                 <td className={td}>
                   <div className="flex justify-end">
-                    <SubscriptionRowActions subId={s.id} status={s.status} canPause={canPause} canCancel={canCancel} canDelete={canDelete} />
+                    <SubscriptionRowActions
+                      subId={s.id}
+                      status={s.status}
+                      canPause={canPause}
+                      canCancel={canCancel}
+                      canDelete={canDelete}
+                      canRemind={canEdit && s.status === 'active' && s.autopay !== 'active' && s.autopay !== 'initialized' && !s.autopayDeclined}
+                    />
                   </div>
                 </td>
               ) : null}

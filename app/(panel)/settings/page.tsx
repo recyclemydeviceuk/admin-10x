@@ -8,10 +8,11 @@ import { BackupsPanel } from './BackupsPanel';
 import { fetchBackupStatus } from '@/lib/actions/backups';
 import { PasswordPanel, ProfilePanel, SyncingPanel } from './ProfileSettings';
 import { DeliveryPanel } from './DeliveryPanel';
+import { SubscriptionsPanel } from './SubscriptionsPanel';
 import { ComingSoonPanel } from './ComingSoonPanel';
 import { FaceLockPanel } from './FaceLockPanel';
 import { can } from '@/lib/auth';
-import { listSignups, type DeliverySettings, type SignupRow } from '@/lib/actions/settings';
+import { listSignups, type DeliverySettings, type SignupRow, type SubscriptionSettings } from '@/lib/actions/settings';
 
 export const metadata = { title: 'Settings' };
 export const dynamic = 'force-dynamic';
@@ -22,6 +23,7 @@ const TABS = [
   { key: 'profile', label: 'Profile', icon: 'users', permission: '' },
   { key: 'face-lock', label: 'Set a Face Lock', icon: 'scan', permission: '' },
   { key: 'delivery', label: 'Delivery', icon: 'truck', permission: 'settings.view' },
+  { key: 'subscriptions', label: 'Subscriptions', icon: 'repeat', permission: 'settings.view' },
   { key: 'coming-soon', label: 'Coming soon', icon: 'eye-off', permission: 'settings.maintenance' },
   { key: 'backups', label: 'Backups', icon: 'download', permission: 'settings.view' },
   { key: 'syncing', label: 'Syncing', icon: 'repeat', permission: 'settings.view' },
@@ -94,6 +96,24 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     }
   }
 
+  let subscriptionSettings: SubscriptionSettings = { subscriptionIntervalDays: 28, autopayReminderEveryDays: 3, autopayReminderMax: 5 };
+  if (tab === 'subscriptions') {
+    const response = await backendFetch('/api/v1/admin/settings');
+    if (response.ok) {
+      const body = (await response.json().catch(() => ({}))) as {
+        settings?: { store?: { subscriptionIntervalDays?: number; autopayReminderEveryDays?: number; autopayReminderMax?: number } };
+      };
+      const store = body.settings?.store;
+      if (store) {
+        subscriptionSettings = {
+          subscriptionIntervalDays: store.subscriptionIntervalDays ?? 28,
+          autopayReminderEveryDays: store.autopayReminderEveryDays ?? 3,
+          autopayReminderMax: store.autopayReminderMax ?? 5,
+        };
+      }
+    }
+  }
+
   return (
     <>
       <PageHeader kicker="Admin" title="Settings" actions={<RefreshButton />} />
@@ -111,6 +131,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         {tab === 'face-lock' ? <FaceLockPanel /> : null}
         {tab === 'coming-soon' ? <ComingSoonPanel enabled={comingSoon} total={signupData.total} signups={signupData.signups} /> : null}
         {tab === 'delivery' ? <DeliveryPanel delivery={delivery} canEdit={can(user, 'settings.delivery')} /> : null}
+        {tab === 'subscriptions' ? <SubscriptionsPanel settings={subscriptionSettings} canEdit={can(user, 'settings.delivery')} /> : null}
         {tab === 'backups' ? <BackupsPanel status={await fetchBackupStatus()} canRun /> : null}
         {tab === 'syncing' ? <SyncingPanel lastRunAt={syncState.lastRunAt} log={syncState.log} /> : null}
       </div>

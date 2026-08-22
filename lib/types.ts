@@ -255,6 +255,10 @@ export type Subscription = {
   /** Cashfree mandate state — read-only, the mandate lives with Cashfree. */
   autopay?: string;
   autopayLastCharge?: string;
+  /** Customer chose pay on delivery — reminders stop. */
+  autopayDeclined?: boolean;
+  autopayReminders?: number;
+  autopayLastReminderAt?: string | null;
 };
 
 /* ------------------------------------------------------------- returns */
