@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { backendFetch } from '@/lib/backend';
 import { assertPermission } from '@/lib/auth';
 import type { ActionResult } from './orders';
+import type { SocialLink } from '@/lib/social-icons';
 
 // =========================================================
 // Store rules — business settings, never credentials.
@@ -97,6 +98,7 @@ export type StoreSettings = {
   pickup: PickupLocation | null;
   pickupNickname: string;
   shiprocketConfigured: boolean;
+  socialLinks: SocialLink[];
 };
 
 export async function saveStoreSettings(formData: FormData): Promise<ActionResult> {
@@ -107,7 +109,20 @@ export async function saveStoreSettings(formData: FormData): Promise<ActionResul
     supportEmail: s('supportEmail'),
     supportPhone: s('supportPhone'),
     codEnabled: formData.get('codEnabled') === 'on',
+    socialLinks: [] as SocialLink[],
   };
+  try {
+    const raw = JSON.parse(String(formData.get('socialLinks') ?? '[]')) as SocialLink[];
+    body.socialLinks = raw
+      .map((l) => ({ platform: l.platform, label: String(l.label ?? '').trim().slice(0, 40), url: String(l.url ?? '').trim() }))
+      .filter((l) => l.url);
+  } catch {
+    return { ok: false, message: 'The social links could not be read — reload and try again.' };
+  }
+  for (const l of body.socialLinks) {
+    if (!/^https?:\/\//i.test(l.url)) return { ok: false, message: `“${l.url}” is not a full link — start it with https://` };
+    if (l.platform === 'custom' && !l.label) return { ok: false, message: 'Give each “Other link” a label.' };
+  }
   if (!body.name) return { ok: false, message: 'The store needs a name.' };
   if (!/^\S+@\S+\.\S+$/.test(body.supportEmail)) return { ok: false, message: 'Enter a valid support email.' };
   return patch('/api/v1/admin/settings/store', body);

@@ -99,7 +99,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
 
   let storeSettings: StoreSettings = {
     name: '10X', supportEmail: '', supportPhone: '', codEnabled: true,
-    pickup: null, pickupNickname: '', shiprocketConfigured: false,
+    pickup: null, pickupNickname: '', shiprocketConfigured: false, socialLinks: [],
   };
   if (tab === 'store') {
     const response = await backendFetch('/api/v1/admin/settings');
@@ -118,6 +118,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         pickup: sr.pickup ?? null,
         pickupNickname: sr.pickupLocation ?? '',
         shiprocketConfigured: Boolean(sr.configured),
+        socialLinks: (st.socialLinks ?? []) as StoreSettings['socialLinks'],
       };
     }
   }

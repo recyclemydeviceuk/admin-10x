@@ -4,6 +4,7 @@ import { useTransition } from 'react';
 
 import { useToast } from '@/components/Toast';
 import { saveStoreSettings, type StoreSettings } from '@/lib/actions/settings';
+import { SocialLinksEditor } from './SocialLinksEditor';
 
 /**
  * Store identity and support contacts. The warehouse is shown, not edited:
@@ -35,6 +36,16 @@ export function StorePanel({ settings, canEdit }: { settings: StoreSettings; can
           <input type="checkbox" name="codEnabled" defaultChecked={settings.codEnabled} disabled={!canEdit} className="h-4 w-4" />
           Offer cash on delivery at checkout
         </label>
+
+        <div className="mt-8 border-t border-paper-200 pt-6">
+          <h3 className="text-body font-semibold">Social links</h3>
+          <p className="mt-1 text-body-sm text-fg-muted">
+            Shown as icons in the storefront footer, in this order. The support email is always the last icon.
+          </p>
+          <div className="mt-4">
+            <SocialLinksEditor initial={settings.socialLinks} disabled={!canEdit} />
+          </div>
+        </div>
         {canEdit ? (
           <div className="mt-6">
             <button className="btn-accent" disabled={pending}>{pending ? 'Saving…' : 'Save store settings'}</button>
